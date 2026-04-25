@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>이미지 사진첩</title>
+    <title>앨범</title>
 
     <style>
       * {
@@ -208,7 +208,7 @@
         <div class="topbar">
           <button onclick="goBack()">←</button>
           <h2 id="albumTitle"></h2>
-          <button onclick="toggleSlideShow()">▶</button>
+          <button onclick="openPlayMode()">▶</button>
         </div>
 
         <div class="viewer">
@@ -241,6 +241,7 @@
           const data = await res.json();
           albums = data.folders;
           renderFolders();
+          openFromAddress();
         } catch (err) {
           folderWrap.innerHTML = `
         <div style="grid-column:1/-1;text-align:center;">
@@ -267,9 +268,9 @@
         });
       }
 
-      function openAlbum(index) {
+      function openAlbum(index, startIndex = 0, updateUrl = true) {
         currentAlbum = albums[index];
-        currentIndex = 0;
+        currentIndex = startIndex;
 
         folderWrap.style.display = "none";
         albumSection.style.display = "block";
@@ -277,6 +278,48 @@
 
         renderThumbs();
         showImage();
+
+        if (updateUrl) {
+          updateAddress();
+        }
+      }
+      function updateAddress() {
+        if (!currentAlbum) return;
+
+        const params = new URLSearchParams();
+        params.set("album", currentAlbum.name);
+        params.set("photo", currentIndex);
+
+        history.replaceState(null, "", "?" + params.toString());
+      }
+      function openPlayMode() {
+        if (!currentAlbum) return;
+
+        const params = new URLSearchParams();
+        params.set("mode", "play");
+        params.set("album", currentAlbum.name);
+        params.set("photo", currentIndex);
+
+        location.href = "./play.html?" + params.toString();
+      }
+
+      function openFromAddress() {
+        const params = new URLSearchParams(location.search);
+        const albumName = params.get("album");
+        const photoIndex = Number(params.get("photo") || 0);
+
+        if (!albumName) return;
+
+        const albumIndex = albums.findIndex((a) => a.name === albumName);
+
+        if (albumIndex === -1) return;
+
+        const safePhotoIndex = Math.max(
+          0,
+          Math.min(photoIndex, albums[albumIndex].images.length - 1),
+        );
+
+        openAlbum(albumIndex, safePhotoIndex, false);
       }
 
       function getImagePath(i) {
@@ -296,6 +339,7 @@
         document.querySelectorAll(".thumbs img").forEach((img, i) => {
           img.classList.toggle("active", i === currentIndex);
         });
+        updateAddress();
       }
 
       function renderThumbs() {
@@ -326,8 +370,10 @@
 
       function goBack() {
         stopSlideShow();
+        currentAlbum = null;
         albumSection.style.display = "none";
         folderWrap.style.display = "grid";
+        history.replaceState(null, "", location.pathname);
       }
 
       const slideBtn = document.getElementById("slideBtn");
@@ -367,3 +413,4 @@
     </script>
   </body>
 </html>
+
