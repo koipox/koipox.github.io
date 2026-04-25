@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>이미지 사진첩</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, #2f354d, #11131d 60%);
+        color: white;
+        min-height: 100vh;
+      }
+
+      header {
+        padding: 24px;
+        text-align: center;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 32px;
+      }
+
+      header p {
+        opacity: 0.7;
+      }
+
+      .folder-wrap {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 18px;
+        padding: 20px;
+        max-width: 1000px;
+        margin: auto;
+      }
+
+      .folder {
+        padding: 24px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(10px);
+        cursor: pointer;
+        text-align: center;
+        transition: 0.25s;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .folder:hover {
+        transform: translateY(-6px) scale(1.03);
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .folder-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+      }
+
+      .album {
+        display: none;
+        max-width: 1100px;
+        margin: auto;
+        padding: 20px;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+        gap: 10px;
+      }
+
+      button {
+        border: none;
+        padding: 12px 18px;
+        border-radius: 999px;
+        cursor: pointer;
+        background: white;
+        color: #111;
+        font-weight: bold;
+        transition: 0.2s;
+      }
+
+      button:hover {
+        transform: scale(1.08);
+      }
+      .nav-btn:hover {
+        transform: translateY(-50%) scale(1.08);
+      }
+
+      .viewer {
+        position: relative;
+        border-radius: 28px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.35);
+        min-height: 520px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .viewer img {
+        max-width: 100%;
+        max-height: 75vh;
+        object-fit: contain;
+        transition: 0.3s;
+      }
+
+      .nav-btn {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 28px;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      .prev {
+        left: 18px;
+      }
+
+      .next {
+        right: 18px;
+      }
+
+      .info {
+        text-align: center;
+        margin: 14px 0;
+        opacity: 0.8;
+      }
+
+      .thumbs {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 12px 4px;
+      }
+
+      .thumbs img {
+        width: 90px;
+        height: 70px;
+        object-fit: cover;
+        border-radius: 14px;
+        cursor: pointer;
+        opacity: 0.55;
+        border: 2px solid transparent;
+        transition: 0.2s;
+      }
+
+      .thumbs img.active {
+        opacity: 1;
+        border-color: white;
+        transform: scale(1.08);
+      }
+
+      .fade {
+        animation: fade 0.25s ease;
+      }
+
+      @keyframes fade {
+        from {
+          opacity: 0;
+          transform: scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @media (max-width: 700px) {
+        .viewer {
+          min-height: 360px;
+        }
+
+        .nav-btn {
+          width: 44px;
+          height: 44px;
+          font-size: 22px;
+        }
+
+        header h1 {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <h1>📁 이미지 사진첩</h1>
+      <p>폴더를 선택하면 사진을 하나씩 볼 수 있습니다.</p>
+    </header>
+
+    <main>
+      <section id="folderWrap" class="folder-wrap"></section>
+
+      <section id="album" class="album">
+        <div class="topbar">
+          <button onclick="goBack()">←</button>
+          <h2 id="albumTitle"></h2>
+          <button onclick="toggleSlideShow()">▶</button>
+        </div>
+
+        <div class="viewer">
+          <button class="nav-btn prev" onclick="prevImage()">‹</button>
+          <img id="mainImage" src="" alt="album image" />
+          <button class="nav-btn next" onclick="nextImage()">›</button>
+        </div>
+
+        <div class="info" id="imageInfo"></div>
+        <div class="thumbs" id="thumbs"></div>
+      </section>
+    </main>
+
+    <script>
+      let albums = [];
+      let currentAlbum = null;
+      let currentIndex = 0;
+      let slideTimer = null;
+
+      const folderWrap = document.getElementById("folderWrap");
+      const albumSection = document.getElementById("album");
+      const albumTitle = document.getElementById("albumTitle");
+      const mainImage = document.getElementById("mainImage");
+      const imageInfo = document.getElementById("imageInfo");
+      const thumbs = document.getElementById("thumbs");
+
+      async function loadAlbums() {
+        try {
+          const res = await fetch("./imgs/manifest.json");
+          const data = await res.json();
+          albums = data.folders;
+          renderFolders();
+        } catch (err) {
+          folderWrap.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;">
+          manifest.json을 불러오지 못했습니다.<br>
+          Live Server 또는 로컬 서버로 실행해 주세요.
+        </div>
+      `;
+        }
+      }
+
+      function renderFolders() {
+        folderWrap.innerHTML = "";
+
+        albums.forEach((album, index) => {
+          const div = document.createElement("div");
+          div.className = "folder";
+          div.innerHTML = `
+        <div class="folder-icon">📂</div>
+        <h3>${album.title || album.name}</h3>
+        <p>${album.images.length}장</p>
+      `;
+          div.onclick = () => openAlbum(index);
+          folderWrap.appendChild(div);
+        });
+      }
+
+      function openAlbum(index) {
+        currentAlbum = albums[index];
+        currentIndex = 0;
+
+        folderWrap.style.display = "none";
+        albumSection.style.display = "block";
+        albumTitle.textContent = currentAlbum.title || currentAlbum.name;
+
+        renderThumbs();
+        showImage();
+      }
+
+      function getImagePath(i) {
+        return `./imgs/${currentAlbum.name}/${currentAlbum.images[i]}`;
+      }
+
+      function showImage() {
+        mainImage.classList.remove("fade");
+
+        setTimeout(() => {
+          mainImage.src = getImagePath(currentIndex);
+          mainImage.classList.add("fade");
+        }, 20);
+
+        imageInfo.textContent = `${currentIndex + 1} / ${currentAlbum.images.length}  ·  ${currentAlbum.images[currentIndex]}`;
+
+        document.querySelectorAll(".thumbs img").forEach((img, i) => {
+          img.classList.toggle("active", i === currentIndex);
+        });
+      }
+
+      function renderThumbs() {
+        thumbs.innerHTML = "";
+
+        currentAlbum.images.forEach((imgName, i) => {
+          const img = document.createElement("img");
+          img.src = `./imgs/${currentAlbum.name}/${imgName}`;
+          img.onclick = () => {
+            currentIndex = i;
+            showImage();
+          };
+          thumbs.appendChild(img);
+        });
+      }
+
+      function nextImage() {
+        currentIndex = (currentIndex + 1) % currentAlbum.images.length;
+        showImage();
+      }
+
+      function prevImage() {
+        currentIndex =
+          (currentIndex - 1 + currentAlbum.images.length) %
+          currentAlbum.images.length;
+        showImage();
+      }
+
+      function goBack() {
+        stopSlideShow();
+        albumSection.style.display = "none";
+        folderWrap.style.display = "grid";
+      }
+
+      const slideBtn = document.getElementById("slideBtn");
+
+      function toggleSlideShow() {
+        if (slideTimer) {
+          stopSlideShow();
+        } else {
+          slideTimer = setInterval(nextImage, 2500);
+          slideBtn.textContent = "⏸";
+        }
+      }
+
+      function stopSlideShow() {
+        clearInterval(slideTimer);
+        slideTimer = null;
+
+        if (slideBtn) {
+          slideBtn.textContent = "▶";
+        }
+      }
+
+      function stopSlideShow() {
+        clearInterval(slideTimer);
+        slideTimer = null;
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (!currentAlbum) return;
+
+        if (e.key === "ArrowRight") nextImage();
+        if (e.key === "ArrowLeft") prevImage();
+        if (e.key === "Escape") goBack();
+      });
+
+      loadAlbums();
+    </script>
+  </body>
+</html>
