@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>이미지 플레이</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        min-height: 100vh;
+        background: radial-gradient(circle at top, #29304a, #080912 70%);
+        font-family: "Segoe UI", sans-serif;
+        color: white;
+      }
+
+      .stage {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        perspective: 900px;
+        overflow: hidden;
+      }
+
+      .floor {
+        position: absolute;
+        left: 50%;
+        bottom: -120px;
+        width: 140vw;
+        height: 45vh;
+        transform: translateX(-50%) rotateX(72deg);
+        transform-origin: center top;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+        background-size: 60px 60px;
+        opacity: 0.45;
+      }
+
+      .photo {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        max-width: 64vw;
+        max-height: 62vh;
+        object-fit: contain;
+        border-radius: 24px;
+        box-shadow:
+          0 30px 90px rgba(0, 0, 0, 0.65),
+          0 0 0 1px rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.08);
+        transform: translate(-50%, -50%) scale(0.75) rotateX(45deg);
+        opacity: 0;
+        animation: dropToFloor 1.2s ease forwards;
+      }
+
+      @keyframes dropToFloor {
+        0% {
+          transform: translate(-50%, -120%) scale(1.15) rotateX(0deg);
+          opacity: 0;
+          filter: blur(8px);
+        }
+
+        45% {
+          opacity: 1;
+          filter: blur(0);
+        }
+
+        100% {
+          transform: translate(-50%, -50%) scale(1) rotateX(0deg);
+          opacity: 1;
+        }
+      }
+
+      .old-photo {
+        animation: sink 0.7s ease forwards;
+      }
+
+      @keyframes sink {
+        to {
+          transform: translate(-50%, 32%) scale(0.65) rotateX(68deg);
+          opacity: 0.28;
+          filter: blur(1px);
+        }
+      }
+
+      .controls {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 12px;
+        z-index: 10;
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(12px);
+        padding: 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      button {
+        border: none;
+        border-radius: 999px;
+        padding: 12px 18px;
+        cursor: pointer;
+        font-weight: bold;
+        background: white;
+        color: #111;
+        transition: 0.2s;
+      }
+
+      button:hover {
+        transform: scale(1.08);
+      }
+
+      .info {
+        position: fixed;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(10px);
+        z-index: 10;
+        font-size: 14px;
+        opacity: 0.9;
+      }
+
+      .error {
+        display: grid;
+        place-items: center;
+        height: 100vh;
+        text-align: center;
+        line-height: 1.8;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="stage" id="stage">
+      <div class="floor"></div>
+    </div>
+
+    <div class="info" id="info">불러오는 중...</div>
+
+    <div class="controls">
+      <button onclick="goBack()">←</button>
+      <button onclick="prevImage()">‹</button>
+      <button id="playBtn" onclick="togglePlay()">⏸</button>
+      <button onclick="nextImage()">›</button>
+    </div>
+
+    <script>
+      let albums = [];
+      let currentAlbum = null;
+      let currentIndex = 0;
+      let timer = null;
+      let isPlaying = true;
+
+      const stage = document.getElementById("stage");
+      const info = document.getElementById("info");
+      const playBtn = document.getElementById("playBtn");
+
+      async function loadAlbums() {
+        try {
+          const res = await fetch("./imgs/manifest.json");
+          const data = await res.json();
+          albums = data.folders;
+          openFromAddress();
+        } catch (err) {
+          document.body.innerHTML = `
+        <div class="error">
+          manifest.json을 불러오지 못했습니다.<br>
+          GitHub Pages 또는 Live Server로 열어주세요.
+        </div>
+      `;
+        }
+      }
+
+      function openFromAddress() {
+        const params = new URLSearchParams(location.search);
+        const albumName = params.get("album");
+        const photoIndex = Number(params.get("photo") || 0);
+
+        const albumIndex = albums.findIndex((a) => a.name === albumName);
+
+        if (albumIndex === -1) {
+          currentAlbum = albums[0];
+          currentIndex = 0;
+        } else {
+          currentAlbum = albums[albumIndex];
+          currentIndex = Math.max(
+            0,
+            Math.min(photoIndex, currentAlbum.images.length - 1),
+          );
+        }
+
+        showImage();
+      }
+
+      function getImagePath() {
+        return `./imgs/${currentAlbum.name}/${currentAlbum.images[currentIndex]}`;
+      }
+
+      function showImage() {
+        const old = stage.querySelector(".photo");
+
+        if (old) {
+          old.classList.add("old-photo");
+          setTimeout(() => old.remove(), 700);
+        }
+
+        const img = document.createElement("img");
+        img.className = "photo";
+        img.src = getImagePath();
+
+        stage.appendChild(img);
+
+        info.textContent = `${currentAlbum.title || currentAlbum.name} · ${currentIndex + 1} / ${currentAlbum.images.length}`;
+
+        updateAddress();
+
+        // 👇 여기 추가
+        if (isPlaying) {
+          clearTimeout(timer);
+          timer = setTimeout(nextImage, 2600);
+        }
+      }
+
+      function updateAddress() {
+        const params = new URLSearchParams();
+        params.set("mode", "play");
+        params.set("album", currentAlbum.name);
+        params.set("photo", currentIndex);
+
+        history.replaceState(null, "", "?" + params.toString());
+      }
+
+      function nextImage() {
+        currentIndex = (currentIndex + 1) % currentAlbum.images.length;
+        showImage();
+      }
+
+      function prevImage() {
+        currentIndex =
+          (currentIndex - 1 + currentAlbum.images.length) %
+          currentAlbum.images.length;
+
+        showImage();
+      }
+
+      function startPlay() {
+        stopPlay();
+        isPlaying = true;
+        playBtn.textContent = "⏸";
+
+        clearTimeout(timer);
+        timer = setTimeout(nextImage, 2600);
+      }
+
+      function stopPlay() {
+        clearTimeout(timer);
+        timer = null;
+        isPlaying = false;
+        playBtn.textContent = "▶";
+      }
+
+      function togglePlay() {
+        if (isPlaying) {
+          stopPlay();
+        } else {
+          startPlay();
+        }
+      }
+
+      function goBack() {
+        const params = new URLSearchParams();
+        params.set("album", currentAlbum.name);
+        params.set("photo", currentIndex);
+
+        location.href = "./index.html?" + params.toString();
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight") nextImage();
+        if (e.key === "ArrowLeft") prevImage();
+        if (e.key === " ") togglePlay();
+        if (e.key === "Escape") goBack();
+      });
+
+      loadAlbums();
+    </script>
+  </body>
+</html>
